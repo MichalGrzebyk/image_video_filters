@@ -3,6 +3,7 @@ import dlib
 import numpy as np
 import queue
 import threading
+import time
 
 
 # bufferless VideoCapture
@@ -51,9 +52,12 @@ def camera_filter():
     ears_img = cv2.imread("data/dog/dog_ears.png", cv2.IMREAD_UNCHANGED)
     nose_img[:, :, :3] = nose_img[:, :, 2::-1]
     ears_img[:, :, :3] = ears_img[:, :, 2::-1]
+    framerate_time = time.time()
+    framerate_frames = 0
+    framerate = 0
     while vid.isOpened():
         img = vid.read()
-
+        framerate_frames += 1
         # Convert to RGBA format
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
@@ -92,25 +96,31 @@ def camera_filter():
             ears_top_left = (left_ear_landmarks[0], left_ear_landmarks[1] - ears_height)
 
             # Blend dog nose and ears images with input image
-            # TODO! check if coordinates are in range of image.shape
             for i in range(nose_img_resized.shape[0]):
                 for j in range(nose_img_resized.shape[1]):
-                    if nose_img_resized[i, j, 3] != 0:
+                    if (nose_img_resized[i, j, 3] != 0) and\
+                            (0 <= nose_top_left[1] + i < img.shape[0]) and\
+                            (0 <= nose_top_left[0] + j < img.shape[1]):
                         img[nose_top_left[1] + i, nose_top_left[0] + j, :] = nose_img_resized[i, j, :]
 
             for i in range(ears_img_resized.shape[0]):
                 for j in range(ears_img_resized.shape[1]):
-                    if ears_img_resized[i, j, 3] != 0:
+                    if (ears_img_resized[i, j, 3] != 0)\
+                            and (0 < ears_top_left[1] + i < img.shape[0])\
+                            and (0 < ears_top_left[0] + j < img.shape[1]):
                         img[ears_top_left[1] + i, ears_top_left[0] + j, :] = ears_img_resized[i, j, :]
 
         # Convert back to BGR format
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
 
-        # TODO! add framerate info
-
+        if framerate_time > 1:
+            framerate_prev_time = framerate_time
+            framerate_time = time.time()
+            framerate = framerate_frames / (framerate_time - framerate_prev_time)
+            framerate_frames = 0
         # Display the output
+        cv2.putText(img, str(framerate)[:4], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         cv2.imshow("Snapchat Filter", img)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
