@@ -41,8 +41,11 @@ class VideoCapture:
 def camera_filter():
     # define a video capture object
     vid = VideoCapture(0)
-    nose = True
-    ears = True
+    states = [True, False, False, False, False, False, False, False, False, False, False, False]
+    # 0 - none, 1 - nose, 2 - ears, 3 - full dog, 4 - rb_change,
+    # 5 - rg_change, 6 - gb_change, 7 - shift_colors+1, 8 - shift_colors+2, 9 - remove_blue
+    # 10 - remove_red, 11 - remove_green
+    actual_state = 0
     # Load face detection model
     detector = dlib.get_frontal_face_detector()
 
@@ -66,22 +69,54 @@ def camera_filter():
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
         # Detect faces
-        face_detection_width = 480
-        downscale = int(img.shape[0] / face_detection_width)
-        face_img = cv2.resize(img, (int(img.shape[1] / downscale), face_detection_width), interpolation=cv2.INTER_AREA)
-        gray = cv2.cvtColor(face_img, cv2.COLOR_RGBA2GRAY)
-        rects = detector(gray, 0)
+        face_based = any(states[1:4])
+        if face_based:
+            face_detection_width = 480
+            downscale = int(img.shape[0] / face_detection_width)
+            face_img = cv2.resize(img, (int(img.shape[1] / downscale), face_detection_width), interpolation=cv2.INTER_AREA)
+            gray = cv2.cvtColor(face_img, cv2.COLOR_RGBA2GRAY)
+            rects = detector(gray, 0)
+        else:
+            rects = []
         # Loop through each face
         for rect in rects:
             # Detect landmarks
-            landmarks = predictor(gray, rect)
-            if nose:
+            if face_based:
+                landmarks = predictor(gray, rect)
+            if states[1] or states[3]:
                 nose_landmarks, nose_center = preprocess_face_points(landmarks, 'dog_nose', downscale)
                 img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
-            if ears:
+            if states[2] or states[3]:
                 left_ear_landmarks, right_ear_landmarks = preprocess_face_points(landmarks, 'dog_ears', downscale)
                 img = add_dog_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
-
+        if states[4]:
+            tmp = img[:, :, 2].copy()
+            img[:, :, 2] = img[:, :, 0].copy()
+            img[:, :, 0] = tmp
+        if states[5]:
+            tmp = img[:, :, 2].copy()
+            img[:, :, 2] = img[:, :, 1].copy()
+            img[:, :, 1] = tmp
+        if states[6]:
+            tmp = img[:, :, 1].copy()
+            img[:, :, 1] = img[:, :, 0].copy()
+            img[:, :, 0] = tmp
+        if states[7]:
+            tmp2 = img[:, :, 2].copy()
+            img[:, :, 2] = img[:, :, 1].copy()
+            img[:, :, 1] = img[:, :, 0].copy()
+            img[:, :, 0] = tmp2
+        if states[8]:
+            tmp0 = img[:, :, 0].copy()
+            img[:, :, 0] = img[:, :, 1].copy()
+            img[:, :, 1] = img[:, :, 2].copy()
+            img[:, :, 2] = tmp0
+        if states[9]:
+            img[:, :, 2] = np.zeros([img.shape[0], img.shape[1]])
+        if states[10]:
+            img[:, :, 0] = np.zeros([img.shape[0], img.shape[1]])
+        if states[11]:
+            img[:, :, 1] = np.zeros([img.shape[0], img.shape[1]])
         # Convert back to BGR format
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
 
@@ -93,8 +128,17 @@ def camera_filter():
         # Display the output
         cv2.putText(img, str(framerate)[:4], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         cv2.imshow("Snapchat Filter", img)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        key = cv2.waitKey(1)
+        if key == ord('q'):
             break
+        if key == ord('d'):
+            states[actual_state] = False
+            actual_state = actual_state + 1 if actual_state < len(states) - 1 else 0
+            states[actual_state] = True
+        if key == ord('a'):
+            states[actual_state] = False
+            actual_state = actual_state - 1 if actual_state > 0 else len(states) - 1
+            states[actual_state] = True
 
     vid.release()
     cv2.destroyAllWindows()
