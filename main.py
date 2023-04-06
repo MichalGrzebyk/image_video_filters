@@ -84,10 +84,10 @@ def camera_filter():
             if face_based:
                 landmarks = predictor(gray, rect)
             if states[1] or states[3]:
-                nose_landmarks, nose_center = preprocess_face_points(landmarks, 'dog_nose', downscale)
+                nose_landmarks, nose_center = preprocess_nose_points(landmarks, downscale)
                 img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
             if states[2] or states[3]:
-                left_ear_landmarks, right_ear_landmarks = preprocess_face_points(landmarks, 'dog_ears', downscale)
+                left_ear_landmarks, right_ear_landmarks = preprocess_ears_points(landmarks, downscale)
                 img = add_dog_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
         if states[4]:
             tmp = img[:, :, 2].copy()
@@ -144,23 +144,16 @@ def camera_filter():
     cv2.destroyAllWindows()
 
 
-def preprocess_face_points(face_points, filter_name, scale):
-    if filter_name == 'dog_nose':
-        nose_landmarks = np.array([(face_points.part(36).x, face_points.part(36).y), (face_points.part(32).x, face_points.part(32).y)]) * scale
-        nose_center = np.array([face_points.part(30).x, face_points.part(30).y]) * scale
-        return nose_landmarks, nose_center
+def preprocess_nose_points(face_points, scale):
+    nose_landmarks = np.array([(face_points.part(36).x, face_points.part(36).y), (face_points.part(32).x, face_points.part(32).y)]) * scale
+    nose_center = np.array([face_points.part(30).x, face_points.part(30).y]) * scale
+    return nose_landmarks, nose_center
 
-    if filter_name == 'dog_ears':
-        right_ear_landmarks = np.array([face_points.part(16).x, face_points.part(25).y]) * scale
-        left_ear_landmarks = np.array([face_points.part(0).x, face_points.part(18).y]) * scale
-        return right_ear_landmarks, left_ear_landmarks
 
-    #for future usage:
-    if filter_name == 'sunglases':
-        return face_points
-    if filter_name == 'tongue':
-        return face_points
-    raise Exception("Wrong parameter: filter_name")
+def preprocess_ears_points(face_points, scale):
+    right_ear_landmarks = np.array([face_points.part(16).x, face_points.part(25).y]) * scale
+    left_ear_landmarks = np.array([face_points.part(0).x, face_points.part(18).y]) * scale
+    return right_ear_landmarks, left_ear_landmarks
 
 
 def add_dog_nose(img, nose_points, nose_center, nose_img):
