@@ -38,13 +38,20 @@ class VideoCapture:
         return self.cap.release()
 
 
+def rgba_to_bgra(image):
+    image[:, :, :3] = image[:, :, 2::-1]
+    return image
+
 def camera_filter():
     # define a video capture object
     vid = VideoCapture(0)
-    states = [True, False, False, False, False, False, False, False, False, False, False, False]
-    # 0 - none, 1 - nose, 2 - ears, 3 - full dog, 4 - rb_change,
-    # 5 - rg_change, 6 - gb_change, 7 - shift_colors+1, 8 - shift_colors+2, 9 - remove_blue
-    # 10 - remove_red, 11 - remove_green
+    states = [True, False, False, False, False, False, False, False, False, False, False, False, False, False]
+    # Indexes of states:
+    # 0 - none, 1 - nose, 2 - ears, 3 - full dog,
+    # 4 - aviators, 5 - thug_glases
+    # 6 - rb_change, 7 - rg_change, 8 - gb_change,
+    # 9 - shift_colors+1, 10 - shift_colors+2,
+    # 11 - remove_blue, 12 - remove_red, 13 - remove_green
     actual_state = 0
     # Load face detection model
     detector = dlib.get_frontal_face_detector()
@@ -55,9 +62,13 @@ def camera_filter():
     # Load dog nose and ears images
     nose_img = cv2.imread("data/dog/dog_nose.png", cv2.IMREAD_UNCHANGED)
     ears_img = cv2.imread("data/dog/dog_ears.png", cv2.IMREAD_UNCHANGED)
-    # RRBA to BGRA conversion
-    nose_img[:, :, :3] = nose_img[:, :, 2::-1]
-    ears_img[:, :, :3] = ears_img[:, :, 2::-1]
+    thug_img = cv2.imread("data/glasses/thuglife.png", cv2.IMREAD_UNCHANGED)
+    aviators_img = cv2.imread("data/glasses/blue_aviators.png", cv2.IMREAD_UNCHANGED)
+    # RGBA to BGRA conversion
+    nose_img = rgba_to_bgra(nose_img)
+    ears_img = rgba_to_bgra(ears_img)
+    thug_img = rgba_to_bgra(thug_img)
+    aviators_img = rgba_to_bgra(aviators_img)
     framerate_time = time.time()
     framerate_frames = 0
     framerate = 0
@@ -69,7 +80,7 @@ def camera_filter():
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
         # Detect faces
-        face_based = any(states[1:4])
+        face_based = any(states[1:6])
         if face_based:
             face_detection_width = 480
             downscale = int(img.shape[0] / face_detection_width)
@@ -89,33 +100,42 @@ def camera_filter():
             if states[2] or states[3]:
                 left_ear_landmarks, right_ear_landmarks = preprocess_ears_points(landmarks, downscale)
                 img = add_dog_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
-        if states[4]:
+            if states[4]:
+                temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
+                img = add_glases(img, temples_landmarks, center, aviators_img)
+            if states[5]:
+                temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
+                img = add_glases(img, temples_landmarks, center, thug_img)
+            # for i in range(0, 68):
+            #     point = (landmarks.part(i).x, landmarks.part(i).y)
+            #     img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
+        if states[6]:
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 0].copy()
             img[:, :, 0] = tmp
-        if states[5]:
+        if states[7]:
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 1].copy()
             img[:, :, 1] = tmp
-        if states[6]:
+        if states[8]:
             tmp = img[:, :, 1].copy()
             img[:, :, 1] = img[:, :, 0].copy()
             img[:, :, 0] = tmp
-        if states[7]:
+        if states[9]:
             tmp2 = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 1].copy()
             img[:, :, 1] = img[:, :, 0].copy()
             img[:, :, 0] = tmp2
-        if states[8]:
+        if states[10]:
             tmp0 = img[:, :, 0].copy()
             img[:, :, 0] = img[:, :, 1].copy()
             img[:, :, 1] = img[:, :, 2].copy()
             img[:, :, 2] = tmp0
-        if states[9]:
-            img[:, :, 2] = np.zeros([img.shape[0], img.shape[1]])
-        if states[10]:
-            img[:, :, 0] = np.zeros([img.shape[0], img.shape[1]])
         if states[11]:
+            img[:, :, 2] = np.zeros([img.shape[0], img.shape[1]])
+        if states[12]:
+            img[:, :, 0] = np.zeros([img.shape[0], img.shape[1]])
+        if states[13]:
             img[:, :, 1] = np.zeros([img.shape[0], img.shape[1]])
         # Convert back to BGR format
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
@@ -156,9 +176,16 @@ def preprocess_ears_points(face_points, scale):
     return right_ear_landmarks, left_ear_landmarks
 
 
+def preprocess_temples_points(face_points, scale):
+    right_temple_landmarks = np.array([face_points.part(16).x, face_points.part(16).y]) * scale
+    left_temple_landmarks = np.array([face_points.part(0).x, face_points.part(0).y]) * scale
+    between_eyes_point = np.array([face_points.part(28).x, face_points.part(28).y]) * scale
+    return [right_temple_landmarks, left_temple_landmarks], between_eyes_point
+
+
 def add_dog_nose(img, nose_points, nose_center, nose_img):
     # Resize dog nose and ears images to fit face
-    nose_width = int(np.linalg.norm(nose_points[0] - nose_points[1]) * 2)
+    nose_width = int(np.linalg.norm(nose_points[0] - nose_points[1]))
     nose_height = int(nose_width * nose_img.shape[0] / nose_img.shape[1])
     nose_img_resized = cv2.resize(nose_img, (nose_width, nose_height))
 
@@ -191,6 +218,21 @@ def add_dog_ears(img, left_ear_points, right_ear_points, ears_img):
                     and (0 < ears_top_left[1] + i < img.shape[0]) \
                     and (0 < ears_top_left[0] + j < img.shape[1]):
                 img[ears_top_left[1] + i, ears_top_left[0] + j, :] = ears_img_resized[i, j, :]
+    return img
+
+
+def add_glases(img, glases_points, glases_center, glases_img, thug=False):
+    glases_width = int(np.linalg.norm(glases_points[0] - glases_points[1]))
+    glases_height = int(glases_width * glases_img.shape[0] / glases_img.shape[1])
+    glases_img_resized = cv2.resize(glases_img, (glases_width, glases_height))
+    glases_top_left = (glases_center[0] - int(glases_width / 2), glases_center[1] - int(glases_height / 2))
+
+    for i in range(glases_img_resized.shape[0]):
+        for j in range(glases_img_resized.shape[1]):
+            if (glases_img_resized[i, j, 3] != 0) and \
+                    (0 <= glases_top_left[1] + i < img.shape[0]) and \
+                    (0 <= glases_top_left[0] + j < img.shape[1]):
+                img[glases_top_left[1] + i, glases_top_left[0] + j, :] = glases_img_resized[i, j, :]
     return img
 
 
