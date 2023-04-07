@@ -48,7 +48,7 @@ def camera_filter():
     states = [True, False, False, False, False, False, False, False, False, False, False, False, False, False]
     # Indexes of states:
     # 0 - none, 1 - nose, 2 - ears, 3 - full dog,
-    # 4 - aviators, 5 - thug_glases
+    # 4 - aviators, 5 - thug_glasses
     # 6 - rb_change, 7 - rg_change, 8 - gb_change,
     # 9 - shift_colors+1, 10 - shift_colors+2,
     # 11 - remove_blue, 12 - remove_red, 13 - remove_green
@@ -102,10 +102,11 @@ def camera_filter():
                 img = add_dog_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
             if states[4]:
                 temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
-                img = add_glases(img, temples_landmarks, center, aviators_img)
+                img = add_glasses(img, temples_landmarks, center, aviators_img)
             if states[5]:
                 temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
-                img = add_glases(img, temples_landmarks, center, thug_img)
+                img = add_glasses(img, temples_landmarks, center, thug_img)
+            # debug - show face detection points numbers
             # for i in range(0, 68):
             #     point = (landmarks.part(i).x, landmarks.part(i).y)
             #     img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
@@ -192,13 +193,7 @@ def add_dog_nose(img, nose_points, nose_center, nose_img):
     # Translate dog nose and ears images to face
     nose_top_left = (nose_center[0] - int(nose_width / 2), nose_center[1] - int(nose_height / 2))
 
-    # Blend dog nose and ears images with input image
-    for i in range(nose_img_resized.shape[0]):
-        for j in range(nose_img_resized.shape[1]):
-            if (nose_img_resized[i, j, 3] != 0) and \
-                    (0 <= nose_top_left[1] + i < img.shape[0]) and \
-                    (0 <= nose_top_left[0] + j < img.shape[1]):
-                img[nose_top_left[1] + i, nose_top_left[0] + j, :] = nose_img_resized[i, j, :]
+    img = blend_images(img, nose_img_resized, nose_top_left)
     return img
 
 
@@ -212,28 +207,28 @@ def add_dog_ears(img, left_ear_points, right_ear_points, ears_img):
     ears_top_left = (right_ear_points[0], left_ear_points[1] - ears_height)
 
     # Blend dog nose and ears images with input image
-    for i in range(ears_img_resized.shape[0]):
-        for j in range(ears_img_resized.shape[1]):
-            if (ears_img_resized[i, j, 3] != 0) \
-                    and (0 < ears_top_left[1] + i < img.shape[0]) \
-                    and (0 < ears_top_left[0] + j < img.shape[1]):
-                img[ears_top_left[1] + i, ears_top_left[0] + j, :] = ears_img_resized[i, j, :]
+    img = blend_images(img, ears_img_resized, ears_top_left)
     return img
 
 
-def add_glases(img, glases_points, glases_center, glases_img, thug=False):
-    glases_width = int(np.linalg.norm(glases_points[0] - glases_points[1]))
-    glases_height = int(glases_width * glases_img.shape[0] / glases_img.shape[1])
-    glases_img_resized = cv2.resize(glases_img, (glases_width, glases_height))
-    glases_top_left = (glases_center[0] - int(glases_width / 2), glases_center[1] - int(glases_height / 2))
+def add_glasses(img, glasses_points, glasses_center, glasses_img, thug=False):
+    glasses_width = int(np.linalg.norm(glasses_points[0] - glasses_points[1]))
+    glasses_height = int(glasses_width * glasses_img.shape[0] / glasses_img.shape[1])
+    glasses_img_resized = cv2.resize(glasses_img, (glasses_width, glasses_height))
+    glasses_top_left = (glasses_center[0] - int(glasses_width / 2), glasses_center[1] - int(glasses_height / 2))
 
-    for i in range(glases_img_resized.shape[0]):
-        for j in range(glases_img_resized.shape[1]):
-            if (glases_img_resized[i, j, 3] != 0) and \
-                    (0 <= glases_top_left[1] + i < img.shape[0]) and \
-                    (0 <= glases_top_left[0] + j < img.shape[1]):
-                img[glases_top_left[1] + i, glases_top_left[0] + j, :] = glases_img_resized[i, j, :]
+    img = blend_images(img, glasses_img_resized, glasses_top_left)
     return img
+
+
+def blend_images(base_img, img_to_add, top_left_point):
+    for i in range(img_to_add.shape[0]):
+        for j in range(img_to_add.shape[1]):
+            if (img_to_add[i, j, 3] != 0) \
+                    and (0 < top_left_point[1] + i < base_img.shape[0]) \
+                    and (0 < top_left_point[0] + j < base_img.shape[1]):
+                base_img[top_left_point[1] + i, top_left_point[0] + j, :] = img_to_add[i, j, :]
+    return base_img
 
 
 if __name__ == '__main__':
