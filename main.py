@@ -6,11 +6,15 @@ import threading
 import time
 
 
+global states, actual_state, video_shape
+
+
 # bufferless VideoCapture
 class VideoCapture:
     def __init__(self, name):
         self.cap = cv2.VideoCapture(name)
         self.q = queue.Queue()
+        self.resolution = [self.cap.get(cv2.CAP_PROP_FRAME_WIDTH), self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)]
         t = threading.Thread(target=self._reader)
         t.daemon = True
         t.start()
@@ -31,6 +35,9 @@ class VideoCapture:
     def read(self):
         return self.q.get()
 
+    def get_resolution(self):
+        return self.resolution
+
     def isOpened(self):
         return self.cap.isOpened()
 
@@ -43,9 +50,24 @@ def bgra_rgba_conversion(image):
     return image
 
 
+def change_params(action, x, y, flags, *userdata):
+    global states, actual_state, video_shape
+    if action == cv2.EVENT_LBUTTONDOWN:
+        if x > int(0.5 * video_shape[0]):
+            states[actual_state] = False
+            actual_state = actual_state + 1 if actual_state < len(states) - 1 else 0
+            states[actual_state] = True
+        else:
+            states[actual_state] = False
+            actual_state = actual_state - 1 if actual_state > 0 else len(states) - 1
+            states[actual_state] = True
+
+
 def camera_filter():
     # define a video capture object
     vid = VideoCapture(0)
+    global states, actual_state, video_shape
+    video_shape = vid.get_resolution()
     states = [True, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
     # Indexes of states:
     # 0 - none, 1 - nose, 2 - ears, 3 - full dog,
@@ -151,6 +173,7 @@ def camera_filter():
         # Display the output
         cv2.putText(img, str(framerate)[:4], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         cv2.imshow("Snapchat Filter", img)
+        cv2.setMouseCallback("Snapchat Filter", change_params)
         key = cv2.waitKey(1)
         if key == ord('q'):
             break
