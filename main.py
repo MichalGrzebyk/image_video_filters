@@ -9,7 +9,7 @@ import time
 
 
 # global variables used in mouse click callback
-global states, actual_state, video_shape
+global states, variants, actual_state, actual_variant, video_shape
 
 
 # bufferless VideoCapture
@@ -54,32 +54,35 @@ def bgra_rgba_conversion(image):
 
 
 def change_params(action, x, y, flags, *userdata):
-    global states, actual_state, video_shape
+    global states, actual_state, actual_variant, video_shape
     if action == cv2.EVENT_LBUTTONDOWN:
-        if x > int(0.5 * video_shape[0]):
-            states[actual_state] = False
-            actual_state = actual_state + 1 if actual_state < len(states) - 1 else 0
-            states[actual_state] = True
-        else:
-            states[actual_state] = False
+        if x < int(0.3 * video_shape[0]):
             actual_state = actual_state - 1 if actual_state > 0 else len(states) - 1
-            states[actual_state] = True
+            actual_variant = 0
+        elif x > int(0.7 * video_shape[0]):
+            actual_state = actual_state + 1 if actual_state < len(states) - 1 else 0
+            actual_variant = 0
+        else:
+            actual_variant = actual_variant + 1 if actual_variant < len(variants[states[actual_state]]) - 1 else 0
 
 
 def camera_filter():
     # define a video capture object
     vid = VideoCapture(0)
-    global states, actual_state, video_shape
+    global states, variants, actual_state, actual_variant, video_shape
     video_shape = vid.get_resolution()
-    states = [True, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
-    # Indexes of states:
-    # 0 - none, 1 - nose, 2 - ears, 3 - full dog,
-    # 4 - aviators, 5 - thug_glasses
-    # 6 - rb_change, 7 - rg_change, 8 - gb_change,
-    # 9 - shift_colors+1, 10 - shift_colors+2,
-    # 11 - remove_blue, 12 - remove_red, 13 - remove_green
-    # 14 - baseball_cap,
+    states = ['raw', 'dog', 'glasses', 'hat', 'color_swap', 'colors_shift', 'color_remove']
+    variants = {
+        'raw': ['raw'],
+        'dog': ['nose', 'ears', 'full'],
+        'glasses': ['aviators', 'thug'],
+        'hat': ['baseball'],
+        'color_swap': ['rb', 'rg', 'gb'],
+        'colors_shift': ['+1', '+2'],
+        'color_remove': ['b', 'r', 'g']
+    }
     actual_state = 0
+    actual_variant = 0
     # Load face detection model
     detector = dlib.get_frontal_face_detector()
 
@@ -92,7 +95,6 @@ def camera_filter():
     thug_img = cv2.imread("data/glasses/thuglife.png", cv2.IMREAD_UNCHANGED)
     aviators_img = cv2.imread("data/glasses/blue_aviators.png", cv2.IMREAD_UNCHANGED)
     baseball_cap = cv2.imread("data/hats/baseball_cap.png", cv2.IMREAD_UNCHANGED)
-    # RGBA to BGRA conversion
     nose_img = bgra_rgba_conversion(nose_img)
     ears_img = bgra_rgba_conversion(ears_img)
     thug_img = bgra_rgba_conversion(thug_img)
@@ -107,7 +109,7 @@ def camera_filter():
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
         # Detect faces
-        face_based = any(states[1:6]) or states[14]
+        face_based = 0 < actual_state < 4
         if face_based:
             face_detection_width = 480
             downscale = int(img.shape[0] / face_detection_width)
@@ -118,52 +120,52 @@ def camera_filter():
                 # Detect landmarks
                 if face_based:
                     landmarks = predictor(gray, rect)
-                if states[1] or states[3]:
+                if (states[actual_state] == 'dog') and\
+                        ((variants[states[actual_state]][actual_variant] == 'nose') or (variants[states[actual_state]][actual_variant] == 'full')):
                     nose_landmarks, nose_center = preprocess_nose_points(landmarks, downscale)
                     img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
-                if states[2] or states[3]:
+                if (states[actual_state] == 'dog') and\
+                        ((variants[states[actual_state]][actual_variant] == 'ears') or (variants[states[actual_state]][actual_variant] == 'full')):
                     left_ear_landmarks, right_ear_landmarks, left_bottom_point = preprocess_ears_points(landmarks, downscale)
                     img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, left_bottom_point, ears_img)
-                if states[4]:
+                if states[actual_state] == 'glasses':
                     temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
-                    img = add_glasses(img, temples_landmarks, center, aviators_img)
-                if states[5]:
-                    temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
-                    img = add_glasses(img, temples_landmarks, center, thug_img)
-                if states[14]:
+                    glasses = aviators_img if variants[states[actual_state]][actual_variant] == 'aviators' else thug_img
+                    img = add_glasses(img, temples_landmarks, center, glasses)
+                if states[actual_state] == 'hat':
                     left_ear_landmarks, right_ear_landmarks, center = preprocess_ears_points(landmarks, downscale)
                     img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, center, baseball_cap)
                 # debug - show face detection points numbers
                 for i in range(0, 68):
                     point = (landmarks.part(i).x, landmarks.part(i).y)
                     img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
-        if states[6]:
+        if (states[actual_state] == 'color_swap') and (variants[states[actual_state]][actual_variant] == 'rb'):
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 0].copy()
             img[:, :, 0] = tmp
-        if states[7]:
+        if (states[actual_state] == 'color_swap') and (variants[states[actual_state]][actual_variant] == 'rg'):
+            tmp = img[:, :, 0].copy()
+            img[:, :, 0] = img[:, :, 1].copy()
+            img[:, :, 1] = tmp
+        if (states[actual_state] == 'color_swap') and (variants[states[actual_state]][actual_variant] == 'gb'):
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 1].copy()
             img[:, :, 1] = tmp
-        if states[8]:
-            tmp = img[:, :, 1].copy()
-            img[:, :, 1] = img[:, :, 0].copy()
-            img[:, :, 0] = tmp
-        if states[9]:
+        if (states[actual_state] == 'colors_shift') and (variants[states[actual_state]][actual_variant] == '+1'):
             tmp2 = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 1].copy()
             img[:, :, 1] = img[:, :, 0].copy()
             img[:, :, 0] = tmp2
-        if states[10]:
+        if (states[actual_state] == 'colors_shift') and (variants[states[actual_state]][actual_variant] == '+2'):
             tmp0 = img[:, :, 0].copy()
             img[:, :, 0] = img[:, :, 1].copy()
             img[:, :, 1] = img[:, :, 2].copy()
             img[:, :, 2] = tmp0
-        if states[11]:
+        if (states[actual_state] == 'color_remove') and (variants[states[actual_state]][actual_variant] == 'b'):
             img[:, :, 2] = np.zeros([img.shape[0], img.shape[1]])
-        if states[12]:
+        if (states[actual_state] == 'color_remove') and (variants[states[actual_state]][actual_variant] == 'r'):
             img[:, :, 0] = np.zeros([img.shape[0], img.shape[1]])
-        if states[13]:
+        if (states[actual_state] == 'color_remove') and (variants[states[actual_state]][actual_variant] == 'g'):
             img[:, :, 1] = np.zeros([img.shape[0], img.shape[1]])
         # Convert back to BGR format
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
@@ -180,14 +182,6 @@ def camera_filter():
         key = cv2.waitKey(1)
         if key == ord('q'):
             break
-        if key == ord('d'):
-            states[actual_state] = False
-            actual_state = actual_state + 1 if actual_state < len(states) - 1 else 0
-            states[actual_state] = True
-        if key == ord('a'):
-            states[actual_state] = False
-            actual_state = actual_state - 1 if actual_state > 0 else len(states) - 1
-            states[actual_state] = True
 
     vid.release()
     cv2.destroyAllWindows()
