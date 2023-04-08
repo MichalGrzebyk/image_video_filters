@@ -42,16 +42,18 @@ def rgba_to_bgra(image):
     image[:, :, :3] = image[:, :, 2::-1]
     return image
 
+
 def camera_filter():
     # define a video capture object
     vid = VideoCapture(0)
-    states = [True, False, False, False, False, False, False, False, False, False, False, False, False, False]
+    states = [True, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
     # Indexes of states:
     # 0 - none, 1 - nose, 2 - ears, 3 - full dog,
     # 4 - aviators, 5 - thug_glasses
     # 6 - rb_change, 7 - rg_change, 8 - gb_change,
     # 9 - shift_colors+1, 10 - shift_colors+2,
     # 11 - remove_blue, 12 - remove_red, 13 - remove_green
+    # 14 - baseball_cap,
     actual_state = 0
     # Load face detection model
     detector = dlib.get_frontal_face_detector()
@@ -64,11 +66,13 @@ def camera_filter():
     ears_img = cv2.imread("data/dog/dog_ears.png", cv2.IMREAD_UNCHANGED)
     thug_img = cv2.imread("data/glasses/thuglife.png", cv2.IMREAD_UNCHANGED)
     aviators_img = cv2.imread("data/glasses/blue_aviators.png", cv2.IMREAD_UNCHANGED)
+    baseball_cap = cv2.imread("data/hats/baseball_cap.png", cv2.IMREAD_UNCHANGED)
     # RGBA to BGRA conversion
     nose_img = rgba_to_bgra(nose_img)
     ears_img = rgba_to_bgra(ears_img)
     thug_img = rgba_to_bgra(thug_img)
     aviators_img = rgba_to_bgra(aviators_img)
+    baseball_cap = rgba_to_bgra(baseball_cap)
     framerate_time = time.time()
     framerate_frames = 0
     framerate = 0
@@ -80,7 +84,7 @@ def camera_filter():
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
         # Detect faces
-        face_based = any(states[1:6])
+        face_based = any(states[1:6]) or any(states[14])
         if face_based:
             face_detection_width = 480
             downscale = int(img.shape[0] / face_detection_width)
@@ -99,13 +103,16 @@ def camera_filter():
                 img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
             if states[2] or states[3]:
                 left_ear_landmarks, right_ear_landmarks = preprocess_ears_points(landmarks, downscale)
-                img = add_dog_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
+                img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
             if states[4]:
                 temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
                 img = add_glasses(img, temples_landmarks, center, aviators_img)
             if states[5]:
                 temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
                 img = add_glasses(img, temples_landmarks, center, thug_img)
+            if states[14]:
+                temples_landmarks, center = preprocess_ears_points(landmarks, downscale)
+                img = add_hat_or_ears(img, temples_landmarks, center, baseball_cap)
             # debug - show face detection points numbers
             # for i in range(0, 68):
             #     point = (landmarks.part(i).x, landmarks.part(i).y)
@@ -197,21 +204,20 @@ def add_dog_nose(img, nose_points, nose_center, nose_img):
     return img
 
 
-def add_dog_ears(img, left_ear_points, right_ear_points, ears_img):
-    # Resize dog nose and ears images to fit face
-    ears_width = int(np.linalg.norm([left_ear_points[0] - right_ear_points[0], left_ear_points[1] - right_ear_points[1]]))
-    ears_height = int(ears_width * ears_img.shape[0] / ears_img.shape[1])
-    ears_img_resized = cv2.resize(ears_img, (ears_width, ears_height))
+def add_hat_or_ears(img, left_ear_points, right_ear_points, thing_img):
+    width = int(np.linalg.norm([left_ear_points[0] - right_ear_points[0], left_ear_points[1] - right_ear_points[1]]))
+    height = int(width * thing_img.shape[0] / thing_img.shape[1])
+    img_resized = cv2.resize(thing_img, (width, height))
 
     # Translate dog nose and ears images to face
-    ears_top_left = (right_ear_points[0], left_ear_points[1] - ears_height)
+    ears_top_left = (right_ear_points[0], left_ear_points[1] - height)
 
     # Blend dog nose and ears images with input image
-    img = blend_images(img, ears_img_resized, ears_top_left)
+    img = blend_images(img, img_resized, ears_top_left)
     return img
 
 
-def add_glasses(img, glasses_points, glasses_center, glasses_img, thug=False):
+def add_glasses(img, glasses_points, glasses_center, glasses_img):
     glasses_width = int(np.linalg.norm(glasses_points[0] - glasses_points[1]))
     glasses_height = int(glasses_width * glasses_img.shape[0] / glasses_img.shape[1])
     glasses_img_resized = cv2.resize(glasses_img, (glasses_width, glasses_height))
