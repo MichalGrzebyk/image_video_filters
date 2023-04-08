@@ -89,32 +89,29 @@ def camera_filter():
             face_img = cv2.resize(img, (int(img.shape[1] / downscale), face_detection_width), interpolation=cv2.INTER_AREA)
             gray = cv2.cvtColor(face_img, cv2.COLOR_RGBA2GRAY)
             rects = detector(gray, 0)
-        else:
-            rects = []
-        # Loop through each face
-        for rect in rects:
-            # Detect landmarks
-            if face_based:
-                landmarks = predictor(gray, rect)
-            if states[1] or states[3]:
-                nose_landmarks, nose_center = preprocess_nose_points(landmarks, downscale)
-                img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
-            if states[2] or states[3]:
-                left_ear_landmarks, right_ear_landmarks = preprocess_ears_points(landmarks, downscale)
-                img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
-            if states[4]:
-                temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
-                img = add_glasses(img, temples_landmarks, center, aviators_img)
-            if states[5]:
-                temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
-                img = add_glasses(img, temples_landmarks, center, thug_img)
-            if states[14]:
-                temples_landmarks, center = preprocess_ears_points(landmarks, downscale)
-                img = add_hat_or_ears(img, temples_landmarks, center, baseball_cap)
-            # debug - show face detection points numbers
-            # for i in range(0, 68):
-            #     point = (landmarks.part(i).x, landmarks.part(i).y)
-            #     img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
+            for rect in rects:
+                # Detect landmarks
+                if face_based:
+                    landmarks = predictor(gray, rect)
+                if states[1] or states[3]:
+                    nose_landmarks, nose_center = preprocess_nose_points(landmarks, downscale)
+                    img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
+                if states[2] or states[3]:
+                    left_ear_landmarks, right_ear_landmarks = preprocess_ears_points(landmarks, downscale)
+                    img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
+                if states[4]:
+                    temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
+                    img = add_glasses(img, temples_landmarks, center, aviators_img)
+                if states[5]:
+                    temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
+                    img = add_glasses(img, temples_landmarks, center, thug_img)
+                if states[14]:
+                    temples_landmarks, center = preprocess_ears_points(landmarks, downscale)
+                    img = add_hat_or_ears(img, temples_landmarks, center, baseball_cap)
+                # debug - show face detection points numbers
+                # for i in range(0, 68):
+                #     point = (landmarks.part(i).x, landmarks.part(i).y)
+                #     img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
         if states[6]:
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 0].copy()
