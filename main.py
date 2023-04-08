@@ -1,11 +1,14 @@
 import cv2
+import imutils
 import dlib
 import numpy as np
+import math
 import queue
 import threading
 import time
 
 
+# global variables used in mouse click callback
 global states, actual_state, video_shape
 
 
@@ -119,8 +122,8 @@ def camera_filter():
                     nose_landmarks, nose_center = preprocess_nose_points(landmarks, downscale)
                     img = add_dog_nose(img, nose_landmarks, nose_center, nose_img)
                 if states[2] or states[3]:
-                    left_ear_landmarks, right_ear_landmarks = preprocess_ears_points(landmarks, downscale)
-                    img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, ears_img)
+                    left_ear_landmarks, right_ear_landmarks, left_bottom_point = preprocess_ears_points(landmarks, downscale)
+                    img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, left_bottom_point, ears_img)
                 if states[4]:
                     temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
                     img = add_glasses(img, temples_landmarks, center, aviators_img)
@@ -128,12 +131,12 @@ def camera_filter():
                     temples_landmarks, center = preprocess_temples_points(landmarks, downscale)
                     img = add_glasses(img, temples_landmarks, center, thug_img)
                 if states[14]:
-                    temples_landmarks, center = preprocess_ears_points(landmarks, downscale)
-                    img = add_hat_or_ears(img, temples_landmarks, center, baseball_cap)
+                    left_ear_landmarks, right_ear_landmarks, center = preprocess_ears_points(landmarks, downscale)
+                    img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, center, baseball_cap)
                 # debug - show face detection points numbers
-                # for i in range(0, 68):
-                #     point = (landmarks.part(i).x, landmarks.part(i).y)
-                #     img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
+                for i in range(0, 68):
+                    point = (landmarks.part(i).x, landmarks.part(i).y)
+                    img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
         if states[6]:
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 0].copy()
@@ -191,7 +194,7 @@ def camera_filter():
 
 
 def preprocess_nose_points(face_points, scale):
-    nose_landmarks = np.array([(face_points.part(36).x, face_points.part(36).y), (face_points.part(32).x, face_points.part(32).y)]) * scale
+    nose_landmarks = np.array([(face_points.part(35).x, face_points.part(35).y), (face_points.part(31).x, face_points.part(31).y)]) * scale
     nose_center = np.array([face_points.part(30).x, face_points.part(30).y]) * scale
     return nose_landmarks, nose_center
 
@@ -199,7 +202,8 @@ def preprocess_nose_points(face_points, scale):
 def preprocess_ears_points(face_points, scale):
     right_ear_landmarks = np.array([face_points.part(16).x, face_points.part(25).y]) * scale
     left_ear_landmarks = np.array([face_points.part(0).x, face_points.part(18).y]) * scale
-    return right_ear_landmarks, left_ear_landmarks
+    left_bottom_point = [left_ear_landmarks[0], min(right_ear_landmarks[1], left_ear_landmarks[1])]
+    return right_ear_landmarks, left_ear_landmarks, left_bottom_point
 
 
 def preprocess_temples_points(face_points, scale):
@@ -211,10 +215,10 @@ def preprocess_temples_points(face_points, scale):
 
 def add_dog_nose(img, nose_points, nose_center, nose_img):
     # Resize dog nose and ears images to fit face
-    nose_width = int(np.linalg.norm(nose_points[0] - nose_points[1]))
+    nose_width = int(np.linalg.norm(nose_points[0] - nose_points[1])) * 2
     nose_height = int(nose_width * nose_img.shape[0] / nose_img.shape[1])
     nose_img_resized = cv2.resize(nose_img, (nose_width, nose_height))
-
+    nose_img_resized, nose_width, nose_height = rotate_img_based_on_2points(nose_img_resized, nose_points)
     # Translate dog nose and ears images to face
     nose_top_left = (nose_center[0] - int(nose_width / 2), nose_center[1] - int(nose_height / 2))
 
@@ -222,14 +226,13 @@ def add_dog_nose(img, nose_points, nose_center, nose_img):
     return img
 
 
-def add_hat_or_ears(img, left_ear_points, right_ear_points, thing_img):
+def add_hat_or_ears(img, left_ear_points, right_ear_points, left_bottom_point, thing_img):
     width = int(np.linalg.norm([left_ear_points[0] - right_ear_points[0], left_ear_points[1] - right_ear_points[1]]))
     height = int(width * thing_img.shape[0] / thing_img.shape[1])
     img_resized = cv2.resize(thing_img, (width, height))
-
+    img_resized, width, height = rotate_img_based_on_2points(img_resized, [left_ear_points, right_ear_points], point='left_bottom')
     # Translate dog nose and ears images to face
-    ears_top_left = (right_ear_points[0], left_ear_points[1] - height)
-
+    ears_top_left = (left_bottom_point[0], left_bottom_point[1] - height)
     # Blend dog nose and ears images with input image
     img = blend_images(img, img_resized, ears_top_left)
     return img
@@ -239,8 +242,8 @@ def add_glasses(img, glasses_points, glasses_center, glasses_img):
     glasses_width = int(np.linalg.norm(glasses_points[0] - glasses_points[1]))
     glasses_height = int(glasses_width * glasses_img.shape[0] / glasses_img.shape[1])
     glasses_img_resized = cv2.resize(glasses_img, (glasses_width, glasses_height))
+    glasses_img_resized, glasses_width, glasses_height = rotate_img_based_on_2points(glasses_img_resized, glasses_points)
     glasses_top_left = (glasses_center[0] - int(glasses_width / 2), glasses_center[1] - int(glasses_height / 2))
-
     img = blend_images(img, glasses_img_resized, glasses_top_left)
     return img
 
@@ -253,6 +256,21 @@ def blend_images(base_img, img_to_add, top_left_point):
                     and (0 < top_left_point[0] + j < base_img.shape[1]):
                 base_img[top_left_point[1] + i, top_left_point[0] + j, :] = img_to_add[i, j, :]
     return base_img
+
+
+def rotate_img_based_on_2points(img, points, point='center'):
+    dx = points[0][0] - points[1][0]
+    dy = -(points[0][1] - points[1][1])
+    alpha = math.degrees(math.atan2(dy, dx))
+    rotation = - alpha
+    if point == 'center':
+        img = imutils.rotate_bound(img, rotation)
+    elif point == 'left_bottom':
+        M = cv2.getRotationMatrix2D(center=(0, img.shape[1] - 1), angle=alpha, scale=1)
+        img = cv2.warpAffine(img, M, [img.shape[1], img.shape[0]])
+    width = img.shape[1]
+    height = img.shape[0]
+    return img, width, height
 
 
 if __name__ == '__main__':
