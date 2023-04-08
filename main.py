@@ -38,7 +38,7 @@ class VideoCapture:
         return self.cap.release()
 
 
-def rgba_to_bgra(image):
+def bgra_rgba_conversion(image):
     image[:, :, :3] = image[:, :, 2::-1]
     return image
 
@@ -68,23 +68,21 @@ def camera_filter():
     aviators_img = cv2.imread("data/glasses/blue_aviators.png", cv2.IMREAD_UNCHANGED)
     baseball_cap = cv2.imread("data/hats/baseball_cap.png", cv2.IMREAD_UNCHANGED)
     # RGBA to BGRA conversion
-    nose_img = rgba_to_bgra(nose_img)
-    ears_img = rgba_to_bgra(ears_img)
-    thug_img = rgba_to_bgra(thug_img)
-    aviators_img = rgba_to_bgra(aviators_img)
-    baseball_cap = rgba_to_bgra(baseball_cap)
+    nose_img = bgra_rgba_conversion(nose_img)
+    ears_img = bgra_rgba_conversion(ears_img)
+    thug_img = bgra_rgba_conversion(thug_img)
+    aviators_img = bgra_rgba_conversion(aviators_img)
+    baseball_cap = bgra_rgba_conversion(baseball_cap)
     framerate_time = time.time()
     framerate_frames = 0
     framerate = 0
     while vid.isOpened():
         img = vid.read()
         framerate_frames += 1
-
-        # Convert to RGBA format
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
         # Detect faces
-        face_based = any(states[1:6]) or any(states[14])
+        face_based = any(states[1:6]) or states[14]
         if face_based:
             face_detection_width = 480
             downscale = int(img.shape[0] / face_detection_width)
