@@ -8,6 +8,10 @@ import threading
 import time
 
 
+# debug == True - show face points as numbers on image
+debug = False
+
+
 # global variables used in mouse click callback
 global states, variants, actual_state, actual_variant, video_shape
 
@@ -71,6 +75,23 @@ def camera_filter():
     vid = VideoCapture(0)
     global states, variants, actual_state, actual_variant, video_shape
     video_shape = vid.get_resolution()
+    # Load images
+    nose_img = cv2.imread("data/dog/dog_nose.png", cv2.IMREAD_UNCHANGED)
+    ears_img = cv2.imread("data/dog/dog_ears.png", cv2.IMREAD_UNCHANGED)
+    thug_img = cv2.imread("data/glasses/thuglife.png", cv2.IMREAD_UNCHANGED)
+    aviators_img = cv2.imread("data/glasses/blue_aviators.png", cv2.IMREAD_UNCHANGED)
+    baseball_cap = cv2.imread("data/hats/baseball_cap.png", cv2.IMREAD_UNCHANGED)
+    color_swap = cv2.imread("data/colors/swap.png", cv2.IMREAD_UNCHANGED)
+    colors_shift = cv2.imread("data/colors/shift.png", cv2.IMREAD_UNCHANGED)
+    color_remove = cv2.imread("data/colors/remove.png", cv2.IMREAD_UNCHANGED)
+    nose_img = bgra_rgba_conversion(nose_img)
+    ears_img = bgra_rgba_conversion(ears_img)
+    thug_img = bgra_rgba_conversion(thug_img)
+    aviators_img = bgra_rgba_conversion(aviators_img)
+    baseball_cap = bgra_rgba_conversion(baseball_cap)
+    color_swap = bgra_rgba_conversion(color_swap)
+    colors_shift = bgra_rgba_conversion(colors_shift)
+    color_remove = bgra_rgba_conversion(color_remove)
     states = ['raw', 'dog', 'glasses', 'hat', 'color_swap', 'colors_shift', 'color_remove']
     variants = {
         'raw': ['raw'],
@@ -81,6 +102,15 @@ def camera_filter():
         'colors_shift': ['+1', '+2'],
         'color_remove': ['b', 'r', 'g']
     }
+    icons = {
+        'raw': np.zeros((1, 1, 4), np.uint8),
+        'dog': nose_img,
+        'glasses': aviators_img,
+        'hat': baseball_cap,
+        'color_swap': color_swap,
+        'colors_shift': colors_shift,
+        'color_remove': color_remove
+    }
     actual_state = 0
     actual_variant = 0
     # Load face detection model
@@ -89,17 +119,6 @@ def camera_filter():
     # Load landmark detection model
     predictor = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 
-    # Load dog nose and ears images
-    nose_img = cv2.imread("data/dog/dog_nose.png", cv2.IMREAD_UNCHANGED)
-    ears_img = cv2.imread("data/dog/dog_ears.png", cv2.IMREAD_UNCHANGED)
-    thug_img = cv2.imread("data/glasses/thuglife.png", cv2.IMREAD_UNCHANGED)
-    aviators_img = cv2.imread("data/glasses/blue_aviators.png", cv2.IMREAD_UNCHANGED)
-    baseball_cap = cv2.imread("data/hats/baseball_cap.png", cv2.IMREAD_UNCHANGED)
-    nose_img = bgra_rgba_conversion(nose_img)
-    ears_img = bgra_rgba_conversion(ears_img)
-    thug_img = bgra_rgba_conversion(thug_img)
-    aviators_img = bgra_rgba_conversion(aviators_img)
-    baseball_cap = bgra_rgba_conversion(baseball_cap)
     framerate_time = time.time()
     framerate_frames = 0
     framerate = 0
@@ -135,10 +154,10 @@ def camera_filter():
                 if states[actual_state] == 'hat':
                     left_ear_landmarks, right_ear_landmarks, center = preprocess_ears_points(landmarks, downscale)
                     img = add_hat_or_ears(img, left_ear_landmarks, right_ear_landmarks, center, baseball_cap)
-                # debug - show face detection points numbers
-                for i in range(0, 68):
-                    point = (landmarks.part(i).x, landmarks.part(i).y)
-                    img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
+                if debug:
+                    for i in range(0, 68):
+                        point = (landmarks.part(i).x, landmarks.part(i).y)
+                        img = cv2.putText(img, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 0, 0), 1, cv2.LINE_AA)
         if (states[actual_state] == 'color_swap') and (variants[states[actual_state]][actual_variant] == 'rb'):
             tmp = img[:, :, 2].copy()
             img[:, :, 2] = img[:, :, 0].copy()
@@ -167,6 +186,10 @@ def camera_filter():
             img[:, :, 0] = np.zeros([img.shape[0], img.shape[1]])
         if (states[actual_state] == 'color_remove') and (variants[states[actual_state]][actual_variant] == 'g'):
             img[:, :, 1] = np.zeros([img.shape[0], img.shape[1]])
+        icon0 = icons[states[actual_state - 1]] if actual_state != 0 else icons[states[-1]]
+        icon1 = icons[states[actual_state]]
+        icon2 = icons[states[actual_state + 1]] if actual_state < len(states) - 1 else icons[states[0]]
+        img = add_gui(img, icon0, icon1, icon2)
         # Convert back to BGR format
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
 
@@ -265,6 +288,23 @@ def rotate_img_based_on_2points(img, points, point='center'):
     width = img.shape[1]
     height = img.shape[0]
     return img, width, height
+
+
+def add_gui(img, prev_icon, actual_icon, next_icon):
+    global video_shape
+    icon_width = 100
+    rect_size = 110
+    for i, icon in enumerate([prev_icon, actual_icon, next_icon]):
+        icon_height = int(icon.shape[0] * icon_width / icon.shape[1])
+        icon = cv2.resize(icon, (icon_width, icon_height))
+        pt_icon_top_left = int((i + 1) * 0.25 * video_shape[0]) - int(rect_size / 2) + int((rect_size - icon_width) / 2), \
+            int(0.9 * video_shape[1] - int(rect_size / 2) - int(icon_height / 2))
+        pt_rect_1 = int((i + 1) * 0.25 * video_shape[0]) - int(rect_size / 2), int(0.9 * video_shape[1] - rect_size)
+        pt_rect_2 = int((i + 1) * 0.25 * video_shape[0]) - int(rect_size / 2) + rect_size, int(0.9 * video_shape[1])
+        img = blend_images(img, icon, pt_icon_top_left)
+        color = [255, 255, 255] if i == 1 else [75, 75, 75]
+        img = cv2.rectangle(img, pt_rect_1, pt_rect_2, color, thickness=3)
+    return img
 
 
 if __name__ == '__main__':
