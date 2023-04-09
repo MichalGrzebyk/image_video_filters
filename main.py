@@ -6,6 +6,7 @@ import math
 import queue
 import threading
 import time
+import datetime
 
 
 # debug == True - show face points as numbers on image
@@ -14,6 +15,7 @@ debug = False
 
 # global variables used in mouse click callback
 global states, variants, actual_state, actual_variant, video_shape
+global prev_rectangle, actual_rectangle, next_rectangle
 
 
 # bufferless VideoCapture
@@ -59,13 +61,16 @@ def bgra_rgba_conversion(image):
 
 def change_params(action, x, y, flags, *userdata):
     global states, actual_state, actual_variant, video_shape
+    global prev_rectangle, actual_rectangle, next_rectangle, save_img
     if action == cv2.EVENT_LBUTTONDOWN:
-        if x < int(0.3 * video_shape[0]):
+        if (prev_rectangle[0][0] < x < prev_rectangle[1][0]) and (prev_rectangle[0][1] < y < prev_rectangle[1][1]):
             actual_state = actual_state - 1 if actual_state > 0 else len(states) - 1
             actual_variant = 0
-        elif x > int(0.7 * video_shape[0]):
+        elif (next_rectangle[0][0] < x < next_rectangle[1][0]) and (next_rectangle[0][1] < y < next_rectangle[1][1]):
             actual_state = actual_state + 1 if actual_state < len(states) - 1 else 0
             actual_variant = 0
+        elif(actual_rectangle[0][0] < x < actual_rectangle[1][0]) and (actual_rectangle[0][1] < y < actual_rectangle[1][1]):
+            save_img = True
         else:
             actual_variant = actual_variant + 1 if actual_variant < len(variants[states[actual_state]]) - 1 else 0
 
@@ -73,7 +78,7 @@ def change_params(action, x, y, flags, *userdata):
 def camera_filter():
     # define a video capture object
     vid = VideoCapture(0)
-    global states, variants, actual_state, actual_variant, video_shape
+    global states, variants, actual_state, actual_variant, video_shape, save_img
     video_shape = vid.get_resolution()
     # Load images
     nose_img = cv2.imread("data/dog/dog_nose.png", cv2.IMREAD_UNCHANGED)
@@ -92,6 +97,7 @@ def camera_filter():
     color_swap = bgra_rgba_conversion(color_swap)
     colors_shift = bgra_rgba_conversion(colors_shift)
     color_remove = bgra_rgba_conversion(color_remove)
+    save_img = False
     states = ['raw', 'dog', 'glasses', 'hat', 'color_swap', 'colors_shift', 'color_remove']
     variants = {
         'raw': ['raw'],
@@ -198,9 +204,12 @@ def camera_filter():
             framerate_time = time.time()
             framerate = framerate_frames / (framerate_time - framerate_prev_time)
             framerate_frames = 0
-        # Display the output
         cv2.putText(img, str(framerate)[:4], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         cv2.imshow("Snapchat Filter", img)
+        if save_img:
+            cv2.imwrite(f'saved_images/image_{datetime.datetime.now().strftime("%H_%M_%S")}.jpg', img)
+            save_img = False
+            print("IMAGE SAVED!")
         cv2.setMouseCallback("Snapchat Filter", change_params)
         key = cv2.waitKey(1)
         if key == ord('q'):
@@ -292,6 +301,7 @@ def rotate_img_based_on_2points(img, points, point='center'):
 
 def add_gui(img, prev_icon, actual_icon, next_icon):
     global video_shape
+    global prev_rectangle, actual_rectangle, next_rectangle
     icon_width = 100
     rect_size = 110
     for i, icon in enumerate([prev_icon, actual_icon, next_icon]):
@@ -304,6 +314,10 @@ def add_gui(img, prev_icon, actual_icon, next_icon):
         img = blend_images(img, icon, pt_icon_top_left)
         color = [255, 255, 255] if i == 1 else [75, 75, 75]
         img = cv2.rectangle(img, pt_rect_1, pt_rect_2, color, thickness=3)
+    prev_rectangle, actual_rectangle, next_rectangle = [[[int((i + 1) * 0.25 * video_shape[0]) - int(rect_size / 2),
+                                                        int(0.9 * video_shape[1] - rect_size)],
+                                                        [int((i + 1) * 0.25 * video_shape[0]) - int(rect_size / 2) + rect_size,
+                                                        int(0.9 * video_shape[1])]] for i in range(0, 3)]
     return img
 
 
