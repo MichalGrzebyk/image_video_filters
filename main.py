@@ -195,10 +195,11 @@ def camera_filter():
         icon0 = icons[states[actual_state - 1]] if actual_state != 0 else icons[states[-1]]
         icon1 = icons[states[actual_state]]
         icon2 = icons[states[actual_state + 1]] if actual_state < len(states) - 1 else icons[states[0]]
+        img_to_save = img.copy()
+        img_to_save = cv2.cvtColor(img_to_save, cv2.COLOR_RGBA2BGR)
         img = add_gui(img, icon0, icon1, icon2)
         # Convert back to BGR format
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-
         if framerate_time > 1:
             framerate_prev_time = framerate_time
             framerate_time = time.time()
@@ -207,7 +208,7 @@ def camera_filter():
         cv2.putText(img, str(framerate)[:4], (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         cv2.imshow("Snapchat Filter", img)
         if save_img:
-            cv2.imwrite(f'saved_images/image_{datetime.datetime.now().strftime("%H_%M_%S")}.jpg', img)
+            cv2.imwrite(f'saved_images/image_{datetime.datetime.now().strftime("%H_%M_%S")}.jpg', img_to_save)
             save_img = False
             print("IMAGE SAVED!")
         cv2.setMouseCallback("Snapchat Filter", change_params)
