@@ -1,11 +1,19 @@
 # Image/video filters
 
-It is real-time video processor similar to snapchat or instagram.
+It is real-time video processor similar to snapchat or instagram filters.
 
 First commit is based on https://codersdaily.in/blog/create-snapchat-filter-using-python with some fixes.
 
 ## Things need to do before first run:
-1. Download model file and copy to models/: https://github.com/italojs/facial-landmarks-recognition/blob/master/shape_predictor_68_face_landmarks.dat 
+1. Download model file and copy to `models/`: https://github.com/italojs/facial-landmarks-recognition/blob/master/shape_predictor_68_face_landmarks.dat 
+2. Install required libraries:
+```
+$ pip3 install -r requirements.txt
+```
+3. Run:
+```
+$ python3 main.py
+```
 
 ## Project structure:
 - src/ - all source files
@@ -23,4 +31,4 @@ First commit is based on https://codersdaily.in/blog/create-snapchat-filter-usin
 1. Change model to a better one (faster/resistant to poor lighting conditions/more detected points on face).
 2. Optimize/change image blending algorithm.
 3. Add new filters (for example "mask filter" that will fit detected points and imitate the behavior of the face).
-4. Refactor camera and image processors into classes.
+4. Check image processing for optimization.
